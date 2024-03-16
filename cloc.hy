@@ -228,7 +228,8 @@ Respect override-extensions/languages."
 
 (defclass GoCounter [SrcCounter]
   (setv src-extensions #(".go")
-        ts-language "go"))
+        ts-language "go"
+        override-languages #("go" "golang")))
 
 (defclass RustCounter [SrcCounter]
   (setv src-extensions #(".rs")

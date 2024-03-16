@@ -2,3 +2,7 @@ __pycache__
 
 /.python-version
 /resources
+
+/*.html
+/*.tex
+/*.pdf

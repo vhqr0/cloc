@@ -1,0 +1,77 @@
+#+TITLE: CLOC: Count Lines of Code
+#+OPTIONS: toc:nil ^:nil
+#+LATEX_COMPILER: xelatex
+#+LATEX_CLASS: article
+#+LATEX_HEADER: \usepackage{ctex}
+#+LATEX_HEADER: \usepackage{geometry}
+#+LATEX_HEADER: \geometry{a4paper,scale=0.9}
+
+一个 Python 实现的基于 Tree Sitter 的 [[https:github.com/AlDanial/cloc][cloc]] 工具：指定一个编程语言和源码路径，在路径中寻找该编程语言的源码，统计文件数、空行数、注释行数和代码行数。
+
+* Features
+
+- 基于 [[https:github.com/tree-sitter][Tree Sitter]] 的 Python 绑定 [[https:github.com/tree-sitter/py-tree-sitter][py-tree-sitter]] 实现多种编程语言代码的准确解析
+- 基于 [[https:github.com/chardet/chardet][chardet]] 实现非 ascii/utf-8 文本编码自动检测
+- 通过进程池架构绕过 GIL 锁、充分利用多核心 CPU 提高统计效率
+
+* Install
+
+首先安装 Python，推荐通过 [[https:github.com/pyenv/pyenv][pyenv]] 安装最新版的 Python 3.12 以满足依赖要求。
+
+然后安装 Python 依赖： =pip install -r requirements.txt= 。
+
+依赖以下 Python 库：
+
+- hy：[[http:hylang.org][Hylang]] 编程语言编译器和运行环境
+- dash-hy：[[https:github.com/vhqr0/dash.hy][dash.hy]] Hy 编程语言基础库（非官方）
+- chardet: 猜测二进制内容的文本编码
+- tree-sitter: Tree Sitter 的 Python 绑定
+- tree-sitter-languages: Tree Sitter 官方的解析器集合，包含 Python、C++、Javascript 等语言
+
+
+关于 Python 版本：一些依赖指定 Python 3.12，但实际上并不是强制的，如果使用旧版本的 Python，可以添加参数 =--ignore-requires-python= 绕过版本检查。另外，根据 [[https:github.com/tree-sitter/py-tree-sitter/issues/209][issues]]，py-tree-sitter 因为 Python 3.12 移除了一个废弃的内置库影响了部分功能而没有指定 Python 3.12，可以通过前述方法强制安装。
+
+* Usage
+
+#+begin_src bash
+  usage: cloc.hy [-h] [-v] [-l LANG] [-T THREADS] src [src ...]
+
+  positional arguments:
+    src
+
+  options:
+    -h, --help            show this help message and exit
+    -v, --verbose
+    -l LANG, --lang LANG
+    -T THREADS, --threads THREADS
+#+end_src
+
+假设一个 cpp 项目的源码存放在 src 和 test，统计命令为： =cloc.hy src test= 。
+
+如果项目使用其它编程语言，则可以通过 =-l/--lang= 选项指定，例如如果是 ruby 项目： =cloc.hy -l ruby src test= 。
+
+支持的编程语言和对应的文件扩展名如下：
+
+| 编程语言    | 编程语言标识         | 文件扩展名               |
+|------------+---------------------+-------------------------|
+| python     | python py           | .py                     |
+| cpp        | c cc cpp            | .c .cc .cpp             |
+| cpp        | h hh hpp            | .h .hh .hpp             |
+| cpp        | c+h                 | .c .cc .cpp .h .hh .hpp |
+| javascript | javascript js       | .js                     |
+| typescript | typescript ts       | .ts .js                 |
+| tsx        | tsx jsx             | .ts .js .tsx .jsx       |
+| go         | go golang           | .go                     |
+| rust       | rust rs             | .rs                     |
+| java       | java                | .java                   |
+| c_sharp    | c_sharp csharp cs   | .cs                     |
+| ruby       | ruby rb             | .rb                     |
+| perl       | perl pl             | .pl                     |
+| lua        | lua                 | .lua                    |
+| haskell    | haskell hs          | .hs                     |
+| elisp      | elisp el            | .el                     |
+
+其它参数：
+
+- =-v/--verbose= 控制是否输出日志，用于调试
+- =-T/--threads n= 使用 n 个线程（为了绕过 GIL，实际使用进程）进行统计，注意该选项只适用于大型项目，否则进程间通信的开销要远高于计算开销
