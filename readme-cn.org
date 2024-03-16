@@ -48,7 +48,7 @@
 
 假设一个 cpp 项目的源码存放在 src 和 test，统计命令为： =cloc.hy src test= 。
 
-如果项目使用其它编程语言，则可以通过 =-l/--lang= 选项指定，例如如果是 ruby 项目： =cloc.hy -l ruby src test= 。
+如果使用其它编程语言，则可以通过 =-l/--lang= 选项指定，例如 ruby 项目： =cloc.hy -l ruby src test= 。
 
 支持的编程语言和对应的文件扩展名如下：
 
@@ -75,3 +75,27 @@
 
 - =-v/--verbose= 控制是否输出日志，用于调试
 - =-T/--threads n= 使用 n 个线程（为了绕过 GIL，实际使用进程）进行统计，注意该选项只适用于大型项目，否则进程间通信的开销要远高于计算开销
+
+
+* Limits
+
+Tree Sitter 限制：首先是进行注释和字符串元素之外的非必要的解析增加了计算量；最主要的限制是必须一次性读取所有内容然后才能进行解析，增加了内存占用，限制了能处理的文件的大小。
+
+Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，然而由于 py-tree-sitter 的设计（通过自定义 Python 函数读取代码）不会在生成 AST 树时释放 GIL，因此无法使用线程池架构，只能使用开销更大的进程池架构才能利用多核心 CPU。
+
+* Extends
+
+添加新的编程语言：
+
+首先要引入该语言的解析器。如果该语言在 tree-sitter-languages 中，则无需额外操作。否则应实现 tree-sitter-<lang> 库并修改 cloc.get-parser。
+
+然后定义新的源码计数器实例，以 Python 为例：
+
+#+begin_src hy
+  (defclass PythonCounter [SrcCounter]
+    (setv src-extensions #(".py")
+          ts-language "python"
+          override-languages #("python" "py")))
+#+end_src
+
+其中，src-extensions 决定如何枚举该编程语言的源文件，ts-language 为 Tree Sitter 中该编程语言的标识。文件扩展名和语言标识会被反向索引，以实现通过文件扩展名或语言标识获取对应的类。默认情况下会以 src-extensions 和 ts-language 作为索引，用户可以通过 override-extensions/languages 手动指定索引。此外，还有一个类属性 ts-comment-types 决定哪些节点类型可以视为注释，默认为 =comments= ，在大多数情况下都适用。
