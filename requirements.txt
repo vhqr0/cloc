@@ -1,5 +1,0 @@
-hy==^0.28.0
-dash-hy==^0.1.0
-tree-sitter==^0.20.4
-tree-sitter-languages=^1.10.2
-chardet==^5.2.0

@@ -19,9 +19,11 @@
 
 首先安装 Python，推荐通过 [[https:github.com/pyenv/pyenv][pyenv]] 安装最新版的 Python 3.12 以满足依赖要求。
 
-然后安装 Python 依赖： =pip install -r requirements.txt= 。
+然后安装 Python 项目管理工具 Poetry： =pip install poetry= ，构建项目： =make build= ，在 dist 目录下生成 wheel 文件。
 
-依赖以下 Python 库：
+最后安装 cloc 包和依赖： =cd dist && pip install cloc-*.whl= 。
+
+当然也可以不使用 poetry，手动安装以下依赖库：
 
 - hy：[[http:hylang.org][Hylang]] 编程语言编译器和运行环境
 - dash-hy：[[https:github.com/vhqr0/dash.hy][dash.hy]] Hy 编程语言基础库（非官方）
@@ -35,7 +37,7 @@
 * Usage
 
 #+begin_src bash
-  usage: cloc.hy [-h] [-v] [-l LANG] [-T THREADS] src [src ...]
+  usage: python -m cloc [-h] [-v] [-l LANG] [-T THREADS] src [src ...]
 
   positional arguments:
     src
@@ -48,9 +50,9 @@
     -T THREADS, --threads THREADS
 #+end_src
 
-假设一个 cpp 项目的源码存放在 src 和 test，统计命令为： =cloc.hy src test= 。
+假设一个 cpp 项目的源码存放在 src 和 test，统计命令为： =python -m cloc src test= 。
 
-如果使用其它编程语言，则可以通过 =-l/--lang= 选项指定，例如 ruby 项目： =cloc.hy -l ruby src test= 。
+如果使用其它编程语言，则可以通过 =-l/--lang= 选项指定，例如 ruby 项目： =python -m cloc -l ruby src test= 。
 
 支持的编程语言和对应的文件扩展名如下：
 
@@ -95,7 +97,7 @@ Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，�
 
 添加新的编程语言：
 
-首先要引入该语言的解析器。如果该语言在 tree-sitter-languages 中，则无需额外操作。否则应实现 tree-sitter-<lang> 库并修改 cloc.SrcCounter.ts-parser。
+首先要引入该语言的解析器。如果该语言在 tree-sitter-languages 中，则无需额外操作。否则应实现 tree-sitter-<lang> 库并修改 cloc.counter.SrcCounter.ts-parser。
 
 然后定义新的源码计数器实例，以 Python 为例：
 

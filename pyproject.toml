@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "cloc"
+version = "0.1.0"
+description = "Count lines of code"
+authors = ["vhqr0 <zq_cmd@163.com>"]
+readme = "readme-cn.org"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+hy = "^0.28.0"
+dash-hy = "^0.1.0"
+chardet = "^5.2.0"
+# tree-sitter = "^0.20.4"
+tree-sitter-languages = "^1.10.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

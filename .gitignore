@@ -1,6 +1,7 @@
 __pycache__
 
 /.python-version
+/dist
 /resources
 
 /*.html
