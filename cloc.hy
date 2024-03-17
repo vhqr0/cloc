@@ -15,10 +15,10 @@
   "Decode code from bytes to list of lines with auto encoding and newline detection."
   (let [detect (char-detect code)
         encoding (get detect "encoding")]
-    (-> (s.decode code (if (none? encoding) "utf-8" encoding))
-        ;; TODO: update dash.strtools.split-lines add :keepends kwarg
-        ;; (s.split-lines :keepends True)
-        (.splitlines :keepends True))))
+    (->> (s.decode code (if (none? encoding) "utf-8" encoding))
+         (s.split-lines)
+         (--map (+ it "\n"))
+         list)))
 
 (defn parse-code [parser #^ (py "list[str]") code]
   "Parse code (list of lines) to AST Tree."
@@ -30,28 +30,38 @@
                          (s.encode (cut line col None)))))))]
     (.parse parser readfn)))
 
-(defn tree-walk [walkfn tree]
-  (defn walk [walkfn node]
-    (walkfn node)
-    (--each node.children (walk walkfn it)))
-  (walk walkfn tree.root-node))
+(defn node-iter [node]
+  "Iter children of AST Node."
+  (yield node)
+  (yield-from (-concat-in (-map node-iter node.children))))
 
-(defn #^ (py "list[list[tuple[int, int]]]") get-regions [tree types #^ (py "list[str]") code]
-  "Walk AST tree, collect regions (list of start/end) of each lines by type."
-  (let [comment-regions (list (-repeatedly-n (len code) list))
-        walkfn (fn [node]
-                 (when (in node.type types)
-                   (let [#(#(start-row start-col) #(end-row end-col)) #(node.start-point node.end-point)]
-                     (while (< start-row end-row)
-                       (let [end-col (len (get code start-row))]
-                         (when (< start-col end-col)
-                           (-update! comment-regions start-row -conj! #(start-col end-col))))
-                       (+= start-row 1)
-                       (setv start-col 0))
-                     (when (< start-col end-col)
-                       (-update! comment-regions start-row -conj! #(start-col end-col))))))]
-    (tree-walk walkfn tree)
-    comment-regions))
+(defn tree-iter [tree]
+  "Iter children of AST Tree."
+  (node-iter tree.root-node))
+
+(defn region-iter [tree types]
+  "Iter regions from AST Tree by types."
+  (->> (tree-iter tree)
+       (--filter (in it.type types))
+       (--map #(it.start-point it.end-point))))
+
+(defn flatten-line-regions [code regions]
+  "Flatten cross lines regions to inline regions. eg.
+(flatten-line-regions [\"...\" \"...\"] [#(#(0 0) #(1 2)) #(#(1 10) #(1 20))])
+;; => [[#(0 ...)] [#(0 2) #(10 20)]]
+"
+  (let [line-regions (list (-repeatedly-n (len code) list))]
+    (--each regions
+            (let [#(#(start-row start-col) #(end-row end-col)) it]
+              (while (< start-row end-row)
+                (let [end-col (len (get code start-row))]
+                  (when (< start-col end-col)
+                    (-update! line-regions start-row -conj! #(start-col end-col))))
+                (+= start-row 1)
+                (setv start-col 0))
+              (when (< start-col end-col)
+                (-update! line-regions start-row -conj! #(start-col end-col)))))
+    line-regions))
 
 (defn select-region [line region]
   (->> region
@@ -72,27 +82,27 @@
            char))
        (s.concats-in)))
 
+(defn dir-path-iter [path]
+  "Iter files from dir."
+  (--mapcat
+    (let [#(base dirs files) it]
+      (--map (/ base it) files))
+    (.walk path)))
+
 (defn path-iter [path]
+  "Iter files from path."
   (when (str? path)
     (setv path (Path path)))
-  (cond (.is-dir path) (yield-from
-                         (--mapcat
-                           (let [#(base dirs files) it]
-                             (--map (/ base it) files))
-                           (.walk path)))
+  (cond (.is-dir path) (yield-from (dir-path-iter path))
         (.is-file path) (yield path)))
 
 (defn src-iter [paths extensions]
-  "Iter source files from paths by extension."
+  "Iter source files from paths by extensions."
   (->> (-map path-iter paths)
        -concat-in
        (--filter (in it.suffix extensions))))
 
 
-
-(defn get-parser [#^ str language]
-  (import tree-sitter-languages [get-parser])
-  (get-parser language))
 
 (defclass SrcCounter []
   (setv src-extensions None
@@ -106,8 +116,7 @@
         language-dict (dict))
 
   (defn __init-subclass__ [cls #* args #** kwargs]
-    "Register extensions/languages to dict when create subclass.
-Respect override-extensions/languages."
+    "Register extensions/languages when create subclass. Respect override-extensions/languages."
     (.__init-subclass__ (super) #* args #** kwargs)
     (when-let [extensions (if (none? cls.override-extensions) cls.src-extensions cls.override-extensions)]
       (--each extensions (-assoc! cls.extension-dict it cls)))
@@ -123,30 +132,42 @@ Respect override-extensions/languages."
   (defn __init__ [self [parser None] [buffer-size (do-mac (* 1024 1024 1024))]]
     (setv self.buffer-size buffer-size))
 
+  (defn [property] ts-parser [self]
+    "Get Tree Sitter parser by self.ts-language."
+    (import tree-sitter-languages [get-parser])
+    (get-parser self.ts-language))
+
   (defn count-code [self #^ bytes code]
+    "Count lines of bytes: decode bytes, parse AST Tree, check parse error, then count."
     (let [code (decode-code code)
-          comment-regions (-> (get-parser self.ts-language)
-                              (parse-code code)
-                              (get-regions self.ts-comment-types code))]
-      (Counter (--map
-                 (let [#(line comment-region) it]
-                   (cond (s.blank? (s.strip line)) "blank"
-                         (and comment-region (s.blank? (s.strip (delete-region line comment-region)))) "comment"
-                         True "code"))
-                 (-zip code comment-regions)))))
+          tree (parse-code self.ts-parser code)]
+      ;; check cross lines parse error
+      (when-let [region (->> (region-iter tree #("ERROR"))
+                             (--filter
+                               (let [#(#(start-row start-col) #(end-row end-col)) it]
+                                 (!= start-row end-row)))
+                             first)]
+        (raise (RuntimeError (s.format "parse error {}" region))))
+      (let [comment-regions (->> (region-iter tree self.ts-comment-types)
+                                 (flatten-line-regions code))]
+        (Counter (--map
+                   (let [#(line comment-region) it]
+                     (cond (s.blank? (s.strip line)) "blank"
+                           (and comment-region (s.blank? (s.strip (delete-region line comment-region)))) "comment"
+                           True "code"))
+                   (-zip code comment-regions))))))
 
   (defn count-file [self path]
+    "Count lines of file: check file size first."
     (if (> (. (.stat path) st-size) self.buffer-size)
         (raise (RuntimeError "file too large"))
         (let [code (.read (.open path "rb"))]
           (.count-code self code))))
 
-  (defn count-src [self paths [logger None]]
-    (->> (src-iter paths self.src-extensions)
+  (defn count-files-from-iter [self paths [logger None]]
+    (->> paths
          (--keep
            (try
-             (when logger
-               (.info logger "count %s" it))
              (.count-file self it)
              (except [e Exception]
                (when logger
@@ -156,35 +177,31 @@ Respect override-extensions/languages."
            (-merge-with o.add acc it {"file" 1})
            (dict))))
 
-  (defn multi-count-src [self paths n [logger None]]
-    (import multiprocessing)
+  (defn count-src [self paths [logger None]]
+    (.count-files-from-iter self (src-iter paths self.src-extensions) :logger logger))
 
-    (setv tasks (multiprocessing.Queue (* 2 n))
-          results (multiprocessing.Queue))
+  (defn multi-count-src [self paths n [logger None]]
+    (import
+      ;; queue [Queue]
+      ;; threading [Thread]
+      multiprocessing [Queue Process :as Thread])
+
+    (setv tasks (Queue (* 2 n))
+          results (Queue))
 
     (defn counter []
-      (let [acc (dict)]
-        (while True
-          (let [path (.get tasks)]
-            (if (none? path)
-                (break)
-                (do
-                  (when logger
-                    (.info logger "count %s" path))
-                  (try
-                    (let [it (.count-file self path)]
-                      (setv acc (-merge-with o.add acc it {"file" 1})))
-                    (except [e Exception]
-                      (when logger
-                        (.info logger "except while counting %s %s" path e))))))))
-        (.put results acc)))
+      (let [it (-take-while (-notfn none?) (-repeatedly tasks.get))]
+        (-> (.count-files-from-iter self it :logger logger)
+            (results.put))))
 
-    (setv threads (list (--repeatedly-n n (multiprocessing.Process :target counter))))
-    (--each threads (.start it))
-    (--each (src-iter paths self.src-extensions) (.put tasks it))
-    (--dotimes n (.put tasks None))
-    (--each threads (.join it))
-    (-merge-with o.add #* (--repeatedly-n n (.get-nowait results)))))
+    (let [threads (list (--repeatedly-n n (Thread :target counter)))]
+      (--each threads (.start it))
+      (-each
+        (-concat (src-iter paths self.src-extensions) (-repeat-n n None))
+        tasks.put)
+      (--each threads (.join it)))
+
+    (-merge-with o.add #* (-repeatedly-n n results.get-nowait))))
 
 
 

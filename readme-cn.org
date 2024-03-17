@@ -87,7 +87,7 @@ Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，�
 
 添加新的编程语言：
 
-首先要引入该语言的解析器。如果该语言在 tree-sitter-languages 中，则无需额外操作。否则应实现 tree-sitter-<lang> 库并修改 cloc.get-parser。
+首先要引入该语言的解析器。如果该语言在 tree-sitter-languages 中，则无需额外操作。否则应实现 tree-sitter-<lang> 库并修改 cloc.SrcCounter.ts-parser。
 
 然后定义新的源码计数器实例，以 Python 为例：
 
