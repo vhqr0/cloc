@@ -1,6 +1,6 @@
 #+TITLE: CLOC: Count Lines of Code
 #+AUTHOR: VHQR (https://github.com/vhqr0)
-#+OPTIONS: toc:nil ^:nil date:nil
+#+OPTIONS: date:nil toc:nil ^:nil
 #+LATEX_COMPILER: xelatex
 #+LATEX_CLASS: article
 #+LATEX_HEADER: \usepackage{ctex}
@@ -100,3 +100,22 @@ Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，�
 #+end_src
 
 其中，src-extensions 决定如何枚举该编程语言的源文件，ts-language 为 Tree Sitter 中该编程语言的标识。文件扩展名和语言标识会被反向索引，以实现通过文件扩展名或语言标识获取对应的类。默认情况下会以 src-extensions 和 ts-language 作为索引，用户可以通过 override-extensions/languages 手动指定索引。此外，还有一个类属性 ts-comment-types 决定哪些节点类型可以视为注释，默认为 =comments= ，在大多数情况下都适用。
+
+* Internal
+
+** Count
+
+1. 首先检查文件大小，如果不超过阈值（默认为 1GB）则继续，读取二进制文件内容。
+2. 然后基于 chardet 猜测二进制内容文本编码，然后以该编码将二进制内容解码为字符串。
+3. 接着使用 Python 内置的 splitlines 分行，自动检测换行符类型（unix、dos、macos）并转换为 unix 风格的换行符（lf）。
+4. 继续使用对应的 Tree Sitter 解析器解析代码得到 AST 树，检查所有节点的类型和区间以确保没有跨行解析错误（否则抛出异常），收集注释区间。
+5. 最后根据注释区间判断并统计每行代码的类型（空行、注释行或代码行）。
+
+
+值得注意的是如果一个文件存在跨行解析错误，那么就会忽略该文件（包括文件计数和行计数），添加参数 =-v= 显示解析失败的文件。
+
+** Multi-Core
+
+添加参数 =-T= 将进入多线程（进程）模式。该模式基于 multiprocessing 提供的进程版的类似 threading 和 queue 的 API。
+
+多线程模式基于两个队列：任务队列和结果队列。主线程在创建完所有子线程后将任务（文件路径）和结束信号（None）添加到任务队列，其中文件路径源是惰性的，任务队列的长度是受到限制的，因此不会一次性地将所有路径加载到内存中。子线程从任务队列中取出任务并更新计数，直到在任务队列中收到退出信号（None），将结果添加到结果队列。最后主线程在结果队列中取出所有计数结果并合并，得到最终结果。
