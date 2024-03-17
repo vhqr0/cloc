@@ -137,38 +137,42 @@
     (import tree-sitter-languages [get-parser])
     (get-parser self.ts-language))
 
-  (defn count-code [self #^ bytes code]
+  (defn get-comment-regions [self code [ignore-errors False]]
+    ;; check cross lines parse error
+    (let [tree (parse-code self.ts-parser code)]
+      (unless ignore-errors
+        (when-let [region (->> (region-iter tree #("ERROR"))
+                               (--filter
+                                 (let [#(#(start-row start-col) #(end-row end-col)) it]
+                                   (!= start-row end-row)))
+                               first)]
+          (raise (RuntimeError (s.format "parse error {}" region)))))
+      (region-iter tree self.ts-comment-types)))
+
+  (defn count-code [self #^ bytes code [ignore-errors False]]
     "Count lines of bytes: decode bytes, parse AST Tree, check parse error, then count."
     (let [code (decode-code code)
-          tree (parse-code self.ts-parser code)]
-      ;; check cross lines parse error
-      (when-let [region (->> (region-iter tree #("ERROR"))
-                             (--filter
-                               (let [#(#(start-row start-col) #(end-row end-col)) it]
-                                 (!= start-row end-row)))
-                             first)]
-        (raise (RuntimeError (s.format "parse error {}" region))))
-      (let [comment-regions (->> (region-iter tree self.ts-comment-types)
-                                 (flatten-line-regions code))]
-        (Counter (--map
-                   (let [#(line comment-region) it]
-                     (cond (s.blank? (s.strip line)) "blank"
-                           (and comment-region (s.blank? (s.strip (delete-region line comment-region)))) "comment"
-                           True "code"))
-                   (-zip code comment-regions))))))
+          comment-regions (->> (.get-comment-regions self code :ignore-errors ignore-errors)
+                               (flatten-line-regions code))]
+      (Counter (--map
+                 (let [#(line comment-region) it]
+                   (cond (s.blank? (s.strip line)) "blank"
+                         (and comment-region (s.blank? (s.strip (delete-region line comment-region)))) "comment"
+                         True "code"))
+                 (-zip code comment-regions)))))
 
-  (defn count-file [self path]
+  (defn count-file [self path #** kwargs]
     "Count lines of file: check file size first."
     (if (> (. (.stat path) st-size) self.buffer-size)
         (raise (RuntimeError "file too large"))
         (let [code (.read (.open path "rb"))]
-          (.count-code self code))))
+          (.count-code self code #** kwargs))))
 
-  (defn count-files-from-iter [self paths [logger None]]
+  (defn count-files-from-iter [self paths [logger None] #** kwargs]
     (->> paths
          (--keep
            (try
-             (.count-file self it)
+             (.count-file self it #** kwargs)
              (except [e Exception]
                (when logger
                  (.info logger "except while counting %s %s" it e))
@@ -177,10 +181,10 @@
            (-merge-with o.add acc it {"file" 1})
            (dict))))
 
-  (defn count-src [self paths [logger None]]
-    (.count-files-from-iter self (src-iter paths self.src-extensions) :logger logger))
+  (defn count-src [self paths #** kwargs]
+    (.count-files-from-iter self (src-iter paths self.src-extensions) #** kwargs))
 
-  (defn multi-count-src [self paths n [logger None]]
+  (defn multi-count-src [self paths n #** kwargs]
     (import
       ;; queue [Queue]
       ;; threading [Thread]
@@ -191,7 +195,7 @@
 
     (defn counter []
       (let [it (-take-while (-notfn none?) (-repeatedly tasks.get))]
-        (-> (.count-files-from-iter self it :logger logger)
+        (-> (.count-files-from-iter self it #** kwargs)
             (results.put))))
 
     (let [threads (list (--repeatedly-n n (Thread :target counter)))]
@@ -205,26 +209,52 @@
 
 
 
+(defclass CCBaseCounter [SrcCounter]
+  (defn get-comment-regions [self code [ignore-errors False]]
+    (import ccparser [CCParser])
+    (let [parser (CCParser)]
+      (try
+        (.parse parser code)
+        (except [Exception]
+          (unless ignore-errors
+            (raise))))
+      parser.comment-regions)))
+
+(defclass CppCounter [CCBaseCounter]
+  (setv src-extensions #(".c" ".cc" ".cpp")
+        override-languages #("c" "cc" "cpp")))
+
+(defclass HppCounter [CCBaseCounter]
+  (setv src-extensions #(".h" ".hh" ".hpp")
+        override-languages #("h" "hh" "hpp")))
+
+(defclass CppHppCounter [CCBaseCounter]
+  (setv src-extensions #(".c" ".h" ".cc" ".hh" ".cpp" ".hpp")
+        override-extensions #()
+        override-languages #("c+h")))
+
+(defclass TSCppCounter [SrcCounter]
+  (setv src-extensions #(".c" ".cc" ".cpp")
+        ts-language "cpp"
+        override-extensions #()
+        override-languages #("ts_c" "ts_cc" "ts_cpp")))
+
+(defclass TSHppCounter [SrcCounter]
+  (setv src-extensions #(".h" ".hh" ".hpp")
+        ts-language "cpp"
+        override-extensions #()
+        override-languages #("ts_h" "ts_hh" "ts_hpp")))
+
+(defclass TSCppHppCounter [SrcCounter]
+  (setv src-extensions #(".c" ".h" ".cc" ".hh" ".cpp" ".hpp")
+        ts-language "cpp"
+        override-extensions #()
+        override-languages #("ts_c+h")))
+
 (defclass PythonCounter [SrcCounter]
   (setv src-extensions #(".py")
         ts-language "python"
         override-languages #("python" "py")))
-
-(defclass CppCounter [SrcCounter]
-  (setv src-extensions #(".c" ".cc" ".cpp")
-        ts-language "cpp"
-        override-languages #("c" "cc" "cpp")))
-
-(defclass HppCounter [SrcCounter]
-  (setv src-extensions #(".h" ".hh" ".hpp")
-        ts-language "cpp"
-        override-languages #("h" "hh" "hpp")))
-
-(defclass CppHppCounter [SrcCounter]
-  (setv src-extensions #(".c" ".h" ".cc" ".hh" ".cpp" ".hpp")
-        ts-language "cpp"
-        override-extensions #()
-        override-languages #("c+h")))
 
 (defclass JavascriptCounter [SrcCounter]
   (setv src-extensions #(".js")
@@ -308,17 +338,21 @@
         lines (+ code comments blanks)]
     (s.format cloc-template files lines code comments blanks)))
 
-(defmain []
+(defn cloc-main []
   (let [args (parse-args [["-v" "--verbose" :action "store_true"]
-                          ["-l" "--lang" :default "cpp"]
+                          ["-l" "--lang" :default "c"]
+                          ["--ignore-errors" :action "store_true"]
                           ["-T" "--threads" :type int]
                           ["src" :nargs "+"]])
-        logger (when args.verbose (cloc-get-logger))
         counter (SrcCounter.from-language args.lang)
+        kwargs {"logger" (when args.verbose (cloc-get-logger))
+                "ignore_errors" args.ignore-errors}
         counts (if args.threads
-                   (counter.multi-count-src args.src :n args.threads :logger logger)
-                   (counter.count-src args.src :logger logger))]
+                   (counter.multi-count-src args.src :n args.threads #** kwargs)
+                   (counter.count-src args.src #** kwargs))]
     (print (cloc-format counts))))
+
+(defmain [] (cloc-main))
 
 (export
   :objects [SrcCounter])

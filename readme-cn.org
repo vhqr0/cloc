@@ -44,6 +44,7 @@
     -h, --help            show this help message and exit
     -v, --verbose
     -l LANG, --lang LANG
+    --ignore-errors
     -T THREADS, --threads THREADS
 #+end_src
 
@@ -53,34 +54,40 @@
 
 支持的编程语言和对应的文件扩展名如下：
 
-| 编程语言    | 编程语言标识         | 文件扩展名               |
-|------------+---------------------+-------------------------|
-| python     | python py           | .py                     |
-| cpp        | c cc cpp            | .c .cc .cpp             |
-| cpp        | h hh hpp            | .h .hh .hpp             |
-| cpp        | c+h                 | .c .cc .cpp .h .hh .hpp |
-| javascript | javascript js       | .js                     |
-| typescript | typescript ts       | .ts .js                 |
-| tsx        | tsx jsx             | .ts .js .tsx .jsx       |
-| go         | go golang           | .go                     |
-| rust       | rust rs             | .rs                     |
-| java       | java                | .java                   |
-| c_sharp    | c_sharp csharp cs   | .cs                     |
-| ruby       | ruby rb             | .rb                     |
-| perl       | perl pl             | .pl                     |
-| lua        | lua                 | .lua                    |
-| haskell    | haskell hs          | .hs                     |
-| elisp      | elisp el            | .el                     |
+| 编程语言             | 编程语言标识       | 文件扩展名               |
+|---------------------+-------------------+-------------------------|
+| cpp (custom parser) | c cc cpp          | .c .cc .cpp             |
+| cpp (custom parser) | h hh hpp          | .h .hh .hpp             |
+| cpp (custom parser) | c+h               | .c .cc .cpp .h .hh .hpp |
+| cpp (tree sitter)   | ts_c ts_cc ts_cpp | .c .cc .cpp             |
+| cpp (tree sitter)   | ts_h ts_hh ts_hpp | .h .hh .hpp             |
+| cpp (tree sitter)   | ts_c+h            | .c .cc .cpp .h .hh .hpp |
+| python              | python py         | .py                     |
+| javascript          | javascript js     | .js                     |
+| typescript          | typescript ts     | .ts .js                 |
+| tsx                 | tsx jsx           | .ts .js .tsx .jsx       |
+| go                  | go golang         | .go                     |
+| rust                | rust rs           | .rs                     |
+| java                | java              | .java                   |
+| c_sharp             | c_sharp csharp cs | .cs                     |
+| ruby                | ruby rb           | .rb                     |
+| perl                | perl pl           | .pl                     |
+| lua                 | lua               | .lua                    |
+| haskell             | haskell hs        | .hs                     |
+| elisp               | elisp el          | .el                     |
+
+其中，由于 C 宏经常导致解析失败，C/C++ 默认使用一个由纯 Python 实现的解析器（cloc.ccparser）。
 
 其它参数：
 
 - =-v/--verbose= 控制是否输出日志，用于调试
+- =--ignore-errors= 跳过跨行解析错误检查，可以得到准确的文件数和总行数，但是可能导致注释行数计数错误
 - =-T/--threads n= 使用 n 个线程（为了绕过 GIL，实际使用进程）进行统计，注意该选项只适用于大型项目，否则进程间通信的开销要远高于计算开销
 
 
 * Limits
 
-Tree Sitter 限制：首先是进行注释和字符串元素之外的非必要的解析增加了计算量，还可能产生非必要的跨行解析错误（例如 C 宏）导致停止计数；最主要的限制是必须一次性读取所有内容然后才能进行解析，增加了内存占用，限制了能处理的文件的大小。
+Tree Sitter 限制：首先是进行注释和字符串元素之外的非必要的解析增加了计算量，还可能产生非必要的跨行解析错误（例如 C 宏）导致停止计数或注释行数计数错误；最主要的限制是必须一次性读取所有内容然后才能进行解析，增加了内存占用，限制了能处理的文件的大小。
 
 Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，然而由于 py-tree-sitter 的设计（通过自定义 Python 函数读取代码）不会在生成 AST 树时释放 GIL，因此无法使用线程池架构，只能使用开销更大的进程池架构才能利用多核心 CPU。
 
@@ -112,7 +119,7 @@ Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，�
 5. 最后根据注释区间判断并统计每行代码的类型（空行、注释行或代码行）。
 
 
-值得注意的是如果一个文件存在跨行解析错误，那么就会忽略该文件（包括文件计数和行计数），添加参数 =-v= 显示解析失败的文件。
+值得注意的是如果一个文件存在跨行解析错误，那么就会忽略该文件（包括文件计数和行计数），添加参数 =-v= 显示解析失败的文件，添加参数 =--ignore-errors= 跳过跨行解析错误检查。
 
 ** Multi-Core
 
