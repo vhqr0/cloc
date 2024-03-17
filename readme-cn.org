@@ -1,5 +1,6 @@
 #+TITLE: CLOC: Count Lines of Code
-#+OPTIONS: toc:nil ^:nil
+#+AUTHOR: VHQR (https://github.com/vhqr0)
+#+OPTIONS: toc:nil ^:nil date:nil
 #+LATEX_COMPILER: xelatex
 #+LATEX_CLASS: article
 #+LATEX_HEADER: \usepackage{ctex}
@@ -79,7 +80,7 @@
 
 * Limits
 
-Tree Sitter 限制：首先是进行注释和字符串元素之外的非必要的解析增加了计算量；最主要的限制是必须一次性读取所有内容然后才能进行解析，增加了内存占用，限制了能处理的文件的大小。
+Tree Sitter 限制：首先是进行注释和字符串元素之外的非必要的解析增加了计算量，还可能产生非必要的跨行解析错误（例如 C 宏）导致停止计数；最主要的限制是必须一次性读取所有内容然后才能进行解析，增加了内存占用，限制了能处理的文件的大小。
 
 Python 限制：猜测文本编码、生成 AST 树是计算密集型任务，然而由于 py-tree-sitter 的设计（通过自定义 Python 函数读取代码）不会在生成 AST 树时释放 GIL，因此无法使用线程池架构，只能使用开销更大的进程池架构才能利用多核心 CPU。
 
