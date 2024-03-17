@@ -1,5 +1,3 @@
-#!/usr/bin/env hy
-
 (require
   dash *)
 

@@ -37,7 +37,7 @@
 (defclass CCParser []
   (defn __init__ [self]
     (setv self.state State.normal
-          self.start-point False
+          self.start-point None
           self.comment-regions (list)))
 
   (defn parse [self code]
