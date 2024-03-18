@@ -293,7 +293,7 @@
 (defclass RubyCounter [SrcCounter]
   (setv src-extensions #(".rb")
         ts-language "ruby"
-        override-languages #("rb" "ruby")))
+        override-languages #("ruby" "rb")))
 
 (defclass PerlCounter [SrcCounter]
   (setv src-extensions #(".pl")
