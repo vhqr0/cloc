@@ -56,27 +56,32 @@
 
 支持的编程语言和对应的文件扩展名如下：
 
-| 编程语言             | 编程语言标识       | 文件扩展名               |
-|---------------------+-------------------+-------------------------|
-| cpp (custom parser) | c cc cpp          | .c .cc .cpp             |
-| cpp (custom parser) | h hh hpp          | .h .hh .hpp             |
-| cpp (custom parser) | c+h               | .c .cc .cpp .h .hh .hpp |
-| cpp (tree sitter)   | ts_c ts_cc ts_cpp | .c .cc .cpp             |
-| cpp (tree sitter)   | ts_h ts_hh ts_hpp | .h .hh .hpp             |
-| cpp (tree sitter)   | ts_c+h            | .c .cc .cpp .h .hh .hpp |
-| python              | python py         | .py                     |
-| javascript          | javascript js     | .js                     |
-| typescript          | typescript ts     | .ts .js                 |
-| tsx                 | tsx jsx           | .ts .js .tsx .jsx       |
-| go                  | go golang         | .go                     |
-| rust                | rust rs           | .rs                     |
-| java                | java              | .java                   |
-| c_sharp             | c_sharp csharp cs | .cs                     |
-| ruby                | ruby rb           | .rb                     |
-| perl                | perl pl           | .pl                     |
-| lua                 | lua               | .lua                    |
-| haskell             | haskell hs        | .hs                     |
-| elisp               | elisp el          | .el                     |
+| 编程语言                     | 编程语言标识          | 文件扩展名                               |
+|-----------------------------+----------------------+-----------------------------------------|
+| cpp (custom parser)         | c cc cpp             | .c .cc .cpp                             |
+| cpp (custom parser)         | h hh hpp             | .h .hh .hpp                             |
+| cpp (custom parser)         | c+h                  | .c .cc .cpp .h .hh .hpp                 |
+| cpp (tree sitter parser)    | ts_c ts_cc ts_cpp    | .c .cc .cpp                             |
+| cpp (tree sitter parser)    | ts_h ts_hh ts_hpp    | .h .hh .hpp                             |
+| cpp (tree sitter parser)    | ts_c+h               | .c .cc .cpp .h .hh .hpp                 |
+| python                      | python py            | .py                                     |
+| javascript                  | javascript js        | .js                                     |
+| typescript                  | typescript ts        | .ts .js                                 |
+| tsx                         | tsx jsx              | .ts .js .tsx .jsx                       |
+| go                          | go golang            | .go                                     |
+| rust                        | rust rs              | .rs                                     |
+| java                        | java                 | .java                                   |
+| c_sharp                     | c_sharp csharp cs    | .cs                                     |
+| ruby                        | ruby rb              | .rb                                     |
+| perl                        | perl pl              | .pl                                     |
+| lua                         | lua                  | .lua                                    |
+| haskell                     | haskell hs           | .hs                                     |
+| lisp (custom parser)        | lisp                 | .lisp .cl .el .scm .clj .cljc .cljs .hy |
+| common_lisp (custom parser) | common_lisp clisp cl | .lisp .cl                               |
+| emacs_lisp (custom parser)  | emacs_lisp elisp el  | .el                                     |
+| scheme (custom parser)      | scheme scm           | .scm                                    |
+| clojure (custom parser)     | clojure clj          | .clj .cljc .cljs                        |
+| hy (custom parser)          | hy hylang            | .hy                                     |
 
 其中，由于 C 宏经常导致解析失败，C/C++ 默认使用一个由纯 Python 实现的解析器（cloc.ccparser）。
 

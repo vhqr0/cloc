@@ -309,10 +309,36 @@
         ts-language "haskell"
         override-languages #("haskell" "hs")))
 
-(defclass ElispCounter [SrcCounter]
+(defclass LispBaseCounter [SrcCounter]
+  (defn count-code [self code [ignore-errors False]]
+    (import cloc.lispparser [lisp-line-count])
+    (let [code (decode-code code)]
+      (lisp-line-count code))))
+
+(defclass LispCounter [LispBaseCounter]
+  (setv src-extensions #(".lisp" ".cl" ".el" ".scm" ".clj" ".cljc" ".cljs" ".hy")
+        override-extensions #()
+        override-languages #("lisp")))
+
+(defclass CommonLispCounter [LispBaseCounter]
+  (setv src-extensions #(".lisp" ".cl")
+        override-languages #("common_lisp" "clisp" "cl")))
+
+(defclass EmacsLispCounter [LispBaseCounter]
   (setv src-extensions #(".el")
-        ts-language "elisp"
-        override-languages #("elisp" "el")))
+        override-languages #("emacs_lisp" "elisp" "el")))
+
+(defclass SchemeCounter [LispBaseCounter]
+  (setv src-extensions #(".scm")
+        override-languages #("scheme" "scm")))
+
+(defclass ClojureCounter [LispBaseCounter]
+  (setv src-extensions #(".clj" ".cljc" ".cljs")
+        override-languages #("clojure" "clj")))
+
+(defclass HyCounter [LispBaseCounter]
+  (setv src-extensions #(".hy")
+        override-languages #("hy" "hylang")))
 
 
 
